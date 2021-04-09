@@ -7,6 +7,7 @@
 //
 
 import UIKit
+import CoreLocation
 
 class WeatherViewController: UIViewController {
 
@@ -14,14 +15,27 @@ class WeatherViewController: UIViewController {
     @IBOutlet weak var temperatureLabel: UILabel!
     @IBOutlet weak var cityLabel: UILabel!
     @IBOutlet weak var searchTextField: UITextField!
+    @IBOutlet weak var principalStack: UIStackView!
+    
+    var managerWeather = WeatherManager()
+    let managerLocation = CLLocationManager()
     
     override func viewDidLoad() {
         super.viewDidLoad()
         searchTextField.delegate = self
+        managerWeather.delegate = self
+        
+        managerLocation.delegate = self
+        managerLocation.requestWhenInUseAuthorization()
+        managerLocation.requestLocation()
     }
     
     @IBAction func searchPressed(_ sender: UIButton) {
         searchTextField.endEditing(false)
+    }
+    
+    @IBAction func pressedLocation(_ sender: UIButton){
+        managerLocation.requestLocation()
     }
     
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
@@ -29,9 +43,25 @@ class WeatherViewController: UIViewController {
     }
 }
 
+// MARK: - CLLocationManagerDelegate
+extension WeatherViewController: CLLocationManagerDelegate {
+    
+    func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
+        if let location = locations.first {
+            self.managerLocation.stopUpdatingLocation()
+            self.managerWeather.fetchWeather(from: location)
+        }
+    }
+    
+    func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
+        print(error)
+    }
+}
+
+// MARK: - UITextViewDelegate
+
 extension WeatherViewController: UITextFieldDelegate {
     
-   
     func textFieldShouldReturn(_ textField: UITextField) -> Bool {
         
         if textField.text!.count > 3 {
@@ -54,7 +84,33 @@ extension WeatherViewController: UITextFieldDelegate {
     }
     
     func textFieldDidEndEditing(_ textField: UITextField) {
+        guard let cidade = textField.text else { return }
+        managerWeather.fetchWeather(from: cidade)
         textField.placeholder = "Search"
         textField.text = ""
+    }
+}
+
+// MARK: - WeatherManagerDelegate
+
+extension WeatherViewController: WeatherManagerDelegate {
+    func weatherDidUpdateData(_ weatherManager: WeatherManager, _ weatherModel: WeatherModel) {
+        DispatchQueue.main.async {
+            self.temperatureLabel.text = String(format: "%.1f", weatherModel.temperature)
+            self.cityLabel.text = weatherModel.cityName
+            self.conditionImageView.image = UIImage(systemName: weatherModel.conditionName)
+            self.principalStack.isHidden = false
+            self.cityLabel.isHidden = false
+            self.conditionImageView.isHidden = false
+        }
+    }
+    
+    func didFailWithError(error: Error) {
+        print(error)
+        DispatchQueue.main.async {
+            self.temperatureLabel.text = "0"
+            self.conditionImageView.image = UIImage(systemName: "togglepower")
+            self.cityLabel.text = "Cidade não encontrada!"
+        }
     }
 }
